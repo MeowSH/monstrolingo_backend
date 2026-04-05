@@ -24,9 +24,27 @@ profile.cov
 go.work
 go.work.sum
 
-# env file
+# env files (local only)
 .env
+.env.*
+!.env.example
 
 # Editor/IDE
 # .idea/
 # .vscode/
+.DS_Store
+
+# Local Encore artifacts
+.encore/
+
+# Local project context for AI
+llms.txt
+frontend.llm.md
+encore.gen.go
+encore.gen.cue
+/.encore
+/encore.gen
+
+# Private ingestion cache (non-public, local only)
+/internal/*/cache/**
+!/internal/*/cache/.keep

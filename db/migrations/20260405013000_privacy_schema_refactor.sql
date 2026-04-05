@@ -1,0 +1,138 @@
+ALTER TABLE source_sync_runs
+    ADD COLUMN IF NOT EXISTS dry_run boolean NOT NULL DEFAULT false,
+    ADD COLUMN IF NOT EXISTS cache_mode text NOT NULL DEFAULT 'live',
+    ADD COLUMN IF NOT EXISTS languages_count smallint NOT NULL DEFAULT 0;
+DROP INDEX IF EXISTS idx_source_sync_runs_provider;
+ALTER TABLE source_sync_runs DROP COLUMN IF EXISTS provider;
+ALTER TABLE source_sync_runs DROP COLUMN IF EXISTS metadata_json;
+
+ALTER TABLE items ADD COLUMN IF NOT EXISTS external_key text;
+UPDATE items SET external_key = source_id WHERE external_key IS NULL;
+ALTER TABLE items ALTER COLUMN external_key SET NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_items_external_key ON items (external_key);
+ALTER TABLE items ADD COLUMN IF NOT EXISTS synced_at timestamptz NOT NULL DEFAULT now();
+UPDATE items SET synced_at = fetched_at WHERE fetched_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_items_synced_at ON items (synced_at);
+DROP INDEX IF EXISTS idx_items_source_slug;
+ALTER TABLE items DROP CONSTRAINT IF EXISTS uq_items_provider_source_id;
+ALTER TABLE items DROP COLUMN IF EXISTS provider;
+ALTER TABLE items DROP COLUMN IF EXISTS source_id;
+ALTER TABLE items DROP COLUMN IF EXISTS source_url;
+ALTER TABLE items DROP COLUMN IF EXISTS source_slug;
+ALTER TABLE items DROP COLUMN IF EXISTS fetched_at;
+ALTER TABLE items DROP COLUMN IF EXISTS details_json;
+
+ALTER TABLE weapons ADD COLUMN IF NOT EXISTS external_key text;
+UPDATE weapons SET external_key = source_id WHERE external_key IS NULL;
+ALTER TABLE weapons ALTER COLUMN external_key SET NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_weapons_external_key ON weapons (external_key);
+ALTER TABLE weapons ADD COLUMN IF NOT EXISTS synced_at timestamptz NOT NULL DEFAULT now();
+UPDATE weapons SET synced_at = fetched_at WHERE fetched_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_weapons_synced_at ON weapons (synced_at);
+DROP INDEX IF EXISTS idx_weapons_source_slug;
+ALTER TABLE weapons DROP CONSTRAINT IF EXISTS uq_weapons_provider_source_id;
+ALTER TABLE weapons DROP COLUMN IF EXISTS provider;
+ALTER TABLE weapons DROP COLUMN IF EXISTS source_id;
+ALTER TABLE weapons DROP COLUMN IF EXISTS source_url;
+ALTER TABLE weapons DROP COLUMN IF EXISTS source_slug;
+ALTER TABLE weapons DROP COLUMN IF EXISTS fetched_at;
+ALTER TABLE weapons DROP COLUMN IF EXISTS details_json;
+
+ALTER TABLE armor_pieces ADD COLUMN IF NOT EXISTS external_key text;
+UPDATE armor_pieces SET external_key = source_id WHERE external_key IS NULL;
+ALTER TABLE armor_pieces ALTER COLUMN external_key SET NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_armor_pieces_external_key ON armor_pieces (external_key);
+ALTER TABLE armor_pieces ADD COLUMN IF NOT EXISTS synced_at timestamptz NOT NULL DEFAULT now();
+UPDATE armor_pieces SET synced_at = fetched_at WHERE fetched_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_armor_pieces_synced_at ON armor_pieces (synced_at);
+DROP INDEX IF EXISTS idx_armor_pieces_source_slug;
+ALTER TABLE armor_pieces DROP CONSTRAINT IF EXISTS uq_armor_pieces_provider_source_id;
+ALTER TABLE armor_pieces DROP COLUMN IF EXISTS provider;
+ALTER TABLE armor_pieces DROP COLUMN IF EXISTS source_id;
+ALTER TABLE armor_pieces DROP COLUMN IF EXISTS source_url;
+ALTER TABLE armor_pieces DROP COLUMN IF EXISTS source_slug;
+ALTER TABLE armor_pieces DROP COLUMN IF EXISTS fetched_at;
+ALTER TABLE armor_pieces DROP COLUMN IF EXISTS details_json;
+
+ALTER TABLE skills ADD COLUMN IF NOT EXISTS external_key text;
+UPDATE skills SET external_key = source_id WHERE external_key IS NULL;
+ALTER TABLE skills ALTER COLUMN external_key SET NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_skills_external_key ON skills (external_key);
+ALTER TABLE skills ADD COLUMN IF NOT EXISTS synced_at timestamptz NOT NULL DEFAULT now();
+UPDATE skills SET synced_at = fetched_at WHERE fetched_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_skills_synced_at ON skills (synced_at);
+DROP INDEX IF EXISTS idx_skills_source_slug;
+ALTER TABLE skills DROP CONSTRAINT IF EXISTS uq_skills_provider_source_id;
+ALTER TABLE skills DROP COLUMN IF EXISTS provider;
+ALTER TABLE skills DROP COLUMN IF EXISTS source_id;
+ALTER TABLE skills DROP COLUMN IF EXISTS source_url;
+ALTER TABLE skills DROP COLUMN IF EXISTS source_slug;
+ALTER TABLE skills DROP COLUMN IF EXISTS fetched_at;
+ALTER TABLE skills DROP COLUMN IF EXISTS details_json;
+
+ALTER TABLE decorations ADD COLUMN IF NOT EXISTS external_key text;
+UPDATE decorations SET external_key = source_id WHERE external_key IS NULL;
+ALTER TABLE decorations ALTER COLUMN external_key SET NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_decorations_external_key ON decorations (external_key);
+ALTER TABLE decorations ADD COLUMN IF NOT EXISTS synced_at timestamptz NOT NULL DEFAULT now();
+UPDATE decorations SET synced_at = fetched_at WHERE fetched_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_decorations_synced_at ON decorations (synced_at);
+DROP INDEX IF EXISTS idx_decorations_source_slug;
+ALTER TABLE decorations DROP CONSTRAINT IF EXISTS uq_decorations_provider_source_id;
+ALTER TABLE decorations DROP COLUMN IF EXISTS provider;
+ALTER TABLE decorations DROP COLUMN IF EXISTS source_id;
+ALTER TABLE decorations DROP COLUMN IF EXISTS source_url;
+ALTER TABLE decorations DROP COLUMN IF EXISTS source_slug;
+ALTER TABLE decorations DROP COLUMN IF EXISTS fetched_at;
+ALTER TABLE decorations DROP COLUMN IF EXISTS details_json;
+
+ALTER TABLE charms ADD COLUMN IF NOT EXISTS external_key text;
+UPDATE charms SET external_key = source_id WHERE external_key IS NULL;
+ALTER TABLE charms ALTER COLUMN external_key SET NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_charms_external_key ON charms (external_key);
+ALTER TABLE charms ADD COLUMN IF NOT EXISTS synced_at timestamptz NOT NULL DEFAULT now();
+UPDATE charms SET synced_at = fetched_at WHERE fetched_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_charms_synced_at ON charms (synced_at);
+DROP INDEX IF EXISTS idx_charms_source_slug;
+ALTER TABLE charms DROP CONSTRAINT IF EXISTS uq_charms_provider_source_id;
+ALTER TABLE charms DROP COLUMN IF EXISTS provider;
+ALTER TABLE charms DROP COLUMN IF EXISTS source_id;
+ALTER TABLE charms DROP COLUMN IF EXISTS source_url;
+ALTER TABLE charms DROP COLUMN IF EXISTS source_slug;
+ALTER TABLE charms DROP COLUMN IF EXISTS fetched_at;
+ALTER TABLE charms DROP COLUMN IF EXISTS details_json;
+
+ALTER TABLE food_skills ADD COLUMN IF NOT EXISTS external_key text;
+UPDATE food_skills SET external_key = source_id WHERE external_key IS NULL;
+ALTER TABLE food_skills ALTER COLUMN external_key SET NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_food_skills_external_key ON food_skills (external_key);
+ALTER TABLE food_skills ADD COLUMN IF NOT EXISTS synced_at timestamptz NOT NULL DEFAULT now();
+UPDATE food_skills SET synced_at = fetched_at WHERE fetched_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_food_skills_synced_at ON food_skills (synced_at);
+DROP INDEX IF EXISTS idx_food_skills_source_slug;
+ALTER TABLE food_skills DROP CONSTRAINT IF EXISTS uq_food_skills_provider_source_id;
+ALTER TABLE food_skills DROP COLUMN IF EXISTS provider;
+ALTER TABLE food_skills DROP COLUMN IF EXISTS source_id;
+ALTER TABLE food_skills DROP COLUMN IF EXISTS source_url;
+ALTER TABLE food_skills DROP COLUMN IF EXISTS source_slug;
+ALTER TABLE food_skills DROP COLUMN IF EXISTS fetched_at;
+ALTER TABLE food_skills DROP COLUMN IF EXISTS details_json;
+
+ALTER TABLE kinsects ADD COLUMN IF NOT EXISTS external_key text;
+UPDATE kinsects SET external_key = source_id WHERE external_key IS NULL;
+ALTER TABLE kinsects ALTER COLUMN external_key SET NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_kinsects_external_key ON kinsects (external_key);
+ALTER TABLE kinsects ADD COLUMN IF NOT EXISTS synced_at timestamptz NOT NULL DEFAULT now();
+UPDATE kinsects SET synced_at = fetched_at WHERE fetched_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_kinsects_synced_at ON kinsects (synced_at);
+DROP INDEX IF EXISTS idx_kinsects_source_slug;
+ALTER TABLE kinsects DROP CONSTRAINT IF EXISTS uq_kinsects_provider_source_id;
+ALTER TABLE kinsects DROP COLUMN IF EXISTS provider;
+ALTER TABLE kinsects DROP COLUMN IF EXISTS source_id;
+ALTER TABLE kinsects DROP COLUMN IF EXISTS source_url;
+ALTER TABLE kinsects DROP COLUMN IF EXISTS source_slug;
+ALTER TABLE kinsects DROP COLUMN IF EXISTS fetched_at;
+ALTER TABLE kinsects DROP COLUMN IF EXISTS details_json;
+
+ALTER TABLE skill_levels DROP COLUMN IF EXISTS details_json;
+ALTER TABLE food_skill_levels DROP COLUMN IF EXISTS details_json;
