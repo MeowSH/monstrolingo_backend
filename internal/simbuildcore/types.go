@@ -13,12 +13,14 @@ type TranslateRequest struct {
 }
 
 type TranslateResponse struct {
-	SourceLangDetected string             `json:"source_lang_detected"`
-	TargetLang         string             `json:"target_lang"`
-	TranslationMode    string             `json:"translation_mode"`
-	SkillsOriginal     []OriginalSkill    `json:"skills_original"`
-	SkillsTranslated   []TranslatedSkill  `json:"skills_translated"`
-	UnmatchedElements  []UnmatchedElement `json:"unmatched_elements"`
+	SourceLangDetected         string             `json:"source_lang_detected"`
+	TargetLang                 string             `json:"target_lang"`
+	TranslationMode            string             `json:"translation_mode"`
+	SkillsOriginal             []OriginalSkill    `json:"skills_original"`
+	SkillsTranslated           []TranslatedSkill  `json:"skills_translated"`
+	SetSkillsTranslated        []TranslatedSkill  `json:"set_skills_translated"`
+	ArmorJewelSkillsTranslated []TranslatedSkill  `json:"armor_jewel_skills_translated"`
+	UnmatchedElements          []UnmatchedElement `json:"unmatched_elements"`
 }
 
 type OriginalSkill struct {
@@ -28,12 +30,21 @@ type OriginalSkill struct {
 }
 
 type TranslatedSkill struct {
-	OriginalText     string `json:"original_text"`
-	OriginalName     string `json:"original_name"`
-	RequestedLevel   int16  `json:"requested_level"`
-	Name             string `json:"name"`
-	Translated       bool   `json:"translated"`
-	SkillExternalKey string `json:"skill_external_key,omitempty"`
+	OriginalText     string            `json:"original_text"`
+	OriginalName     string            `json:"original_name"`
+	RequestedLevel   int16             `json:"requested_level"`
+	Name             string            `json:"name"`
+	Translated       bool              `json:"translated"`
+	SkillExternalKey string            `json:"skill_external_key,omitempty"`
+	AssociatedJewels []AssociatedJewel `json:"associated_jewels,omitempty"`
+}
+
+type AssociatedJewel struct {
+	DecorationExternalKey string `json:"decoration_external_key"`
+	Name                  string `json:"name"`
+	SlotSize              int16  `json:"slot_size"`
+	Rarity                int16  `json:"rarity"`
+	SkillLevel            int16  `json:"skill_level"`
 }
 
 type UnmatchedElement struct {
@@ -63,6 +74,7 @@ type resolvedSkill struct {
 	SkillID     uuid.UUID
 	ExternalKey string
 	MaxLevel    int16
+	IsSetBonus  bool
 	SourceName  string
 	TargetName  string
 	EnglishName string
@@ -78,4 +90,14 @@ type skillTranslationRow struct {
 	LanguageCode  string
 	Name          string
 	EffectSummary string
+}
+
+type decorationTranslationRow struct {
+	SkillID               uuid.UUID
+	DecorationExternalKey string
+	SlotSize              int16
+	Rarity                int16
+	SkillLevel            int16
+	LanguageCode          string
+	Name                  string
 }

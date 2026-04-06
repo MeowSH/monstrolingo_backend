@@ -122,6 +122,34 @@ func (r *Repository) ListSkillTranslations(ctx context.Context) ([]skillTranslat
 	return rows, nil
 }
 
+func (r *Repository) ListDecorationTranslations(ctx context.Context) ([]decorationTranslationRow, error) {
+	rows := make([]decorationTranslationRow, 0, 2048)
+	if err := r.db.WithContext(ctx).
+		Table("decorations AS d").
+		Select(strings.Join([]string{
+			"ds.skill_id AS skill_id",
+			"d.external_key AS decoration_external_key",
+			"d.slot_size AS slot_size",
+			"d.rarity AS rarity",
+			"ds.level AS skill_level",
+			"l.code AS language_code",
+			"dt.name AS name",
+		}, ", ")).
+		Joins("JOIN decoration_skills AS ds ON ds.decoration_id = d.id").
+		Joins("JOIN decorations_translations AS dt ON dt.decoration_id = d.id").
+		Joins("JOIN languages AS l ON l.id = dt.language_id").
+		Where("d.deleted_at IS NULL").
+		Where("l.is_active = TRUE").
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+
+	for i := range rows {
+		rows[i].LanguageCode = normalizeLanguageCode(rows[i].LanguageCode)
+	}
+	return rows, nil
+}
+
 func envOr(key string, fallback string) string {
 	v := os.Getenv(key)
 	if v == "" {

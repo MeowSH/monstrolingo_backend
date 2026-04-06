@@ -3,6 +3,7 @@ package simbuildcore
 import (
 	"context"
 	"slices"
+	"sort"
 	"strings"
 
 	"github.com/google/uuid"
@@ -43,11 +44,18 @@ func (s *Service) TranslateSimBuild(ctx context.Context, req *TranslateRequest) 
 	if err != nil {
 		return nil, internalError("load skill translations", err)
 	}
+	decorationRows, err := s.repo.ListDecorationTranslations(ctx)
+	if err != nil {
+		return nil, internalError("load decoration translations", err)
+	}
 	byLanguage, bySkillID, byEffect, byExternal := indexSkillTranslations(skillRows)
 	sourceLang := detectSourceLanguage(parsed.Skills, byLanguage, activeLanguages)
 
 	resolvedSkills := resolveSkills(parsed.Skills, sourceLang, targetLang, byLanguage, byEffect, byExternal, bySkillID)
+	resolvedSkills = deduplicateResolvedSkills(resolvedSkills)
 	originalSkills, translatedSkills, unmatched := buildSkillResponsePayload(resolvedSkills)
+	translatedSkills = attachAssociatedJewels(resolvedSkills, translatedSkills, decorationRows, targetLang)
+	setSkills, armorJewelSkills := splitTranslatedSkillsByKind(resolvedSkills, translatedSkills)
 
 	mode := translationModeFull
 	if len(unmatched) > 0 {
@@ -55,12 +63,14 @@ func (s *Service) TranslateSimBuild(ctx context.Context, req *TranslateRequest) 
 	}
 
 	return &TranslateResponse{
-		SourceLangDetected: sourceLang,
-		TargetLang:         targetLang,
-		TranslationMode:    mode,
-		SkillsOriginal:     originalSkills,
-		SkillsTranslated:   translatedSkills,
-		UnmatchedElements:  unmatched,
+		SourceLangDetected:         sourceLang,
+		TargetLang:                 targetLang,
+		TranslationMode:            mode,
+		SkillsOriginal:             originalSkills,
+		SkillsTranslated:           translatedSkills,
+		SetSkillsTranslated:        setSkills,
+		ArmorJewelSkillsTranslated: armorJewelSkills,
+		UnmatchedElements:          unmatched,
 	}, nil
 }
 
@@ -178,6 +188,7 @@ func resolveSkills(
 		resolved.SkillID = chosen.SkillID
 		resolved.ExternalKey = chosen.ExternalKey
 		resolved.MaxLevel = chosen.MaxLevel
+		resolved.IsSetBonus = chosen.IsSetBonus
 		resolved.SourceName = strings.TrimSpace(chosen.Name)
 		resolved.Resolved = true
 
@@ -251,6 +262,93 @@ func chooseSkillTranslation(byLang map[string]skillTranslationRow, lang string) 
 	return skillTranslationRow{}, false
 }
 
+func deduplicateResolvedSkills(rows []resolvedSkill) []resolvedSkill {
+	if len(rows) <= 1 {
+		return rows
+	}
+
+	out := make([]resolvedSkill, 0, len(rows))
+	indexByKey := make(map[string]int, len(rows))
+	for _, row := range rows {
+		key := resolvedSkillDedupeKey(row)
+		if key == "" {
+			out = append(out, row)
+			continue
+		}
+		if idx, ok := indexByKey[key]; ok {
+			out[idx] = mergeResolvedSkill(out[idx], row)
+			continue
+		}
+		indexByKey[key] = len(out)
+		out = append(out, row)
+	}
+	return out
+}
+
+func resolvedSkillDedupeKey(row resolvedSkill) string {
+	if row.Resolved {
+		externalKey := strings.TrimSpace(strings.ToLower(row.ExternalKey))
+		if externalKey != "" {
+			return "resolved:" + externalKey
+		}
+	}
+	base := normalizeSkillName(row.Requested.BaseName)
+	if base == "" {
+		base = normalizeSkillName(row.Requested.OriginalText)
+	}
+	if base == "" {
+		return ""
+	}
+	return "requested:" + base
+}
+
+func mergeResolvedSkill(existing resolvedSkill, incoming resolvedSkill) resolvedSkill {
+	merged := existing
+
+	if incoming.Requested.RequestedLevel > merged.Requested.RequestedLevel {
+		merged.Requested.RequestedLevel = incoming.Requested.RequestedLevel
+	}
+
+	if !merged.Resolved && incoming.Resolved {
+		merged.Resolved = true
+		merged.SkillID = incoming.SkillID
+		merged.ExternalKey = incoming.ExternalKey
+		merged.MaxLevel = incoming.MaxLevel
+		merged.IsSetBonus = incoming.IsSetBonus
+		merged.SourceName = incoming.SourceName
+		merged.TargetName = incoming.TargetName
+		merged.EnglishName = incoming.EnglishName
+		merged.Translated = incoming.Translated
+		return merged
+	}
+
+	merged.IsSetBonus = merged.IsSetBonus || incoming.IsSetBonus
+	merged.Translated = merged.Translated || incoming.Translated
+	if merged.SkillID == uuid.Nil && incoming.SkillID != uuid.Nil {
+		merged.SkillID = incoming.SkillID
+	}
+	if strings.TrimSpace(merged.ExternalKey) == "" && strings.TrimSpace(incoming.ExternalKey) != "" {
+		merged.ExternalKey = incoming.ExternalKey
+	}
+	if incoming.MaxLevel > merged.MaxLevel {
+		merged.MaxLevel = incoming.MaxLevel
+	}
+	if strings.TrimSpace(merged.SourceName) == "" && strings.TrimSpace(incoming.SourceName) != "" {
+		merged.SourceName = incoming.SourceName
+	}
+	if strings.TrimSpace(merged.EnglishName) == "" && strings.TrimSpace(incoming.EnglishName) != "" {
+		merged.EnglishName = incoming.EnglishName
+	}
+
+	if !existing.Translated && incoming.Translated && strings.TrimSpace(incoming.TargetName) != "" {
+		merged.TargetName = incoming.TargetName
+	} else if strings.TrimSpace(merged.TargetName) == "" && strings.TrimSpace(incoming.TargetName) != "" {
+		merged.TargetName = incoming.TargetName
+	}
+
+	return merged
+}
+
 func buildSkillResponsePayload(resolved []resolvedSkill) (
 	[]OriginalSkill,
 	[]TranslatedSkill,
@@ -299,4 +397,187 @@ func buildSkillResponsePayload(resolved []resolvedSkill) (
 	}
 
 	return original, translated, unmatched
+}
+
+func splitTranslatedSkillsByKind(
+	resolved []resolvedSkill,
+	translated []TranslatedSkill,
+) ([]TranslatedSkill, []TranslatedSkill) {
+	setSkills := make([]TranslatedSkill, 0, len(translated))
+	armorJewelSkills := make([]TranslatedSkill, 0, len(translated))
+
+	limit := len(translated)
+	if len(resolved) < limit {
+		limit = len(resolved)
+	}
+	for i := 0; i < limit; i++ {
+		if !resolved[i].Resolved {
+			continue
+		}
+		if isSetOrGroupResolvedSkill(resolved[i]) {
+			setSkills = append(setSkills, translated[i])
+			continue
+		}
+		armorJewelSkills = append(armorJewelSkills, translated[i])
+	}
+
+	return setSkills, armorJewelSkills
+}
+
+func attachAssociatedJewels(
+	resolved []resolvedSkill,
+	translated []TranslatedSkill,
+	decorationRows []decorationTranslationRow,
+	targetLang string,
+) []TranslatedSkill {
+	if len(translated) == 0 || len(decorationRows) == 0 {
+		return translated
+	}
+
+	bySkillID := associatedJewelsBySkillID(decorationRows, targetLang)
+	if len(bySkillID) == 0 {
+		return translated
+	}
+
+	out := make([]TranslatedSkill, len(translated))
+	copy(out, translated)
+
+	limit := len(out)
+	if len(resolved) < limit {
+		limit = len(resolved)
+	}
+	for i := 0; i < limit; i++ {
+		if !resolved[i].Resolved {
+			continue
+		}
+		jewels := bySkillID[resolved[i].SkillID]
+		if len(jewels) == 0 {
+			continue
+		}
+		copied := make([]AssociatedJewel, len(jewels))
+		copy(copied, jewels)
+		out[i].AssociatedJewels = copied
+	}
+	return out
+}
+
+func associatedJewelsBySkillID(rows []decorationTranslationRow, targetLang string) map[uuid.UUID][]AssociatedJewel {
+	type decorationAggregate struct {
+		ExternalKey string
+		SlotSize    int16
+		Rarity      int16
+		SkillLevel  int16
+		NamesByLang map[string]string
+	}
+
+	bySkill := make(map[uuid.UUID]map[string]*decorationAggregate, 512)
+	for _, row := range rows {
+		if row.SkillID == uuid.Nil {
+			continue
+		}
+		externalKey := strings.TrimSpace(strings.ToLower(row.DecorationExternalKey))
+		if externalKey == "" {
+			continue
+		}
+		lang := normalizeLanguageCode(row.LanguageCode)
+		name := strings.TrimSpace(row.Name)
+
+		decMap, ok := bySkill[row.SkillID]
+		if !ok {
+			decMap = make(map[string]*decorationAggregate, 8)
+			bySkill[row.SkillID] = decMap
+		}
+		agg, ok := decMap[externalKey]
+		if !ok {
+			agg = &decorationAggregate{
+				ExternalKey: externalKey,
+				SlotSize:    row.SlotSize,
+				Rarity:      row.Rarity,
+				SkillLevel:  row.SkillLevel,
+				NamesByLang: make(map[string]string, 4),
+			}
+			decMap[externalKey] = agg
+		}
+		if row.SkillLevel > agg.SkillLevel {
+			agg.SkillLevel = row.SkillLevel
+		}
+		if lang != "" && name != "" {
+			agg.NamesByLang[lang] = name
+		}
+	}
+
+	out := make(map[uuid.UUID][]AssociatedJewel, len(bySkill))
+	for skillID, decMap := range bySkill {
+		jewels := make([]AssociatedJewel, 0, len(decMap))
+		for _, agg := range decMap {
+			name := pickDecorationNameForLanguage(agg.NamesByLang, targetLang)
+			if name == "" {
+				name = agg.ExternalKey
+			}
+			jewels = append(jewels, AssociatedJewel{
+				DecorationExternalKey: agg.ExternalKey,
+				Name:                  name,
+				SlotSize:              agg.SlotSize,
+				Rarity:                agg.Rarity,
+				SkillLevel:            agg.SkillLevel,
+			})
+		}
+		sort.Slice(jewels, func(i, j int) bool {
+			if jewels[i].SlotSize != jewels[j].SlotSize {
+				return jewels[i].SlotSize < jewels[j].SlotSize
+			}
+			if jewels[i].SkillLevel != jewels[j].SkillLevel {
+				return jewels[i].SkillLevel > jewels[j].SkillLevel
+			}
+			if jewels[i].Name != jewels[j].Name {
+				return jewels[i].Name < jewels[j].Name
+			}
+			return jewels[i].DecorationExternalKey < jewels[j].DecorationExternalKey
+		})
+		out[skillID] = jewels
+	}
+	return out
+}
+
+func pickDecorationNameForLanguage(namesByLang map[string]string, targetLang string) string {
+	if len(namesByLang) == 0 {
+		return ""
+	}
+	target := normalizeLanguageCode(targetLang)
+	if target != "" {
+		if value := strings.TrimSpace(namesByLang[target]); value != "" {
+			return value
+		}
+	}
+	if value := strings.TrimSpace(namesByLang["en"]); value != "" {
+		return value
+	}
+
+	langs := make([]string, 0, len(namesByLang))
+	for lang := range namesByLang {
+		langs = append(langs, lang)
+	}
+	sort.Strings(langs)
+	for _, lang := range langs {
+		if value := strings.TrimSpace(namesByLang[lang]); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func isSetOrGroupResolvedSkill(skill resolvedSkill) bool {
+	if skill.IsSetBonus {
+		return true
+	}
+	alias, ok := resolveSkillAlias(skill.Requested.BaseName, "")
+	if !ok {
+		return false
+	}
+	switch strings.TrimSpace(strings.ToLower(alias.Category)) {
+	case "set", "group":
+		return true
+	default:
+		return false
+	}
 }

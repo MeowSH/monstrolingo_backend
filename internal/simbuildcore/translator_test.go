@@ -225,3 +225,201 @@ func TestResolveSkills_UsesJapaneseAliasCanonicalFallback(t *testing.T) {
 		t.Fatalf("expected translated target name in en fallback, got %s", resolved[0].TargetName)
 	}
 }
+
+func TestSplitTranslatedSkillsByKind(t *testing.T) {
+	resolved := []resolvedSkill{
+		{
+			Requested:  requestedSkill{OriginalText: "A", BaseName: "A", RequestedLevel: 1},
+			Resolved:   true,
+			IsSetBonus: true,
+		},
+		{
+			Requested:  requestedSkill{OriginalText: "B", BaseName: "B", RequestedLevel: 1},
+			Resolved:   true,
+			IsSetBonus: false,
+		},
+		{
+			Requested: requestedSkill{OriginalText: "C", BaseName: "C", RequestedLevel: 1},
+			Resolved:  false,
+		},
+	}
+	translated := []TranslatedSkill{
+		{OriginalText: "A", Name: "A-fr"},
+		{OriginalText: "B", Name: "B-fr"},
+		{OriginalText: "C", Name: "C-fr"},
+	}
+
+	setSkills, armorJewelSkills := splitTranslatedSkillsByKind(resolved, translated)
+	if len(setSkills) != 1 {
+		t.Fatalf("expected 1 set skill, got %d", len(setSkills))
+	}
+	if len(armorJewelSkills) != 1 {
+		t.Fatalf("expected 1 armor/jewel skill, got %d", len(armorJewelSkills))
+	}
+	if setSkills[0].OriginalText != "A" {
+		t.Fatalf("unexpected set skill bucket content: %+v", setSkills[0])
+	}
+	if armorJewelSkills[0].OriginalText != "B" {
+		t.Fatalf("unexpected armor/jewel bucket content: %+v", armorJewelSkills[0])
+	}
+}
+
+func TestSplitTranslatedSkillsByKind_UsesAliasFallbackWhenFlagMissing(t *testing.T) {
+	resolved := []resolvedSkill{
+		{
+			Requested: requestedSkill{
+				OriginalText:   "Scorcher I",
+				BaseName:       "Scorcher",
+				RequestedLevel: 1,
+			},
+			Resolved:   true,
+			IsSetBonus: false,
+		},
+	}
+	translated := []TranslatedSkill{
+		{OriginalText: "Scorcher I", Name: "Flamboiement I"},
+	}
+
+	setSkills, armorJewelSkills := splitTranslatedSkillsByKind(resolved, translated)
+	if len(setSkills) != 1 {
+		t.Fatalf("expected alias fallback to classify as set skill, got %d", len(setSkills))
+	}
+	if len(armorJewelSkills) != 0 {
+		t.Fatalf("expected no armor/jewel skills when alias fallback matches set/group, got %d", len(armorJewelSkills))
+	}
+}
+
+func TestAttachAssociatedJewels_TargetLanguageThenEnglishFallback(t *testing.T) {
+	skillIDOne := uuid.MustParse("00000000-0000-0000-0000-0000000000d1")
+	skillIDTwo := uuid.MustParse("00000000-0000-0000-0000-0000000000d2")
+
+	resolved := []resolvedSkill{
+		{
+			Requested: requestedSkill{
+				OriginalText:   "Attack Boost Lv3",
+				BaseName:       "Attack Boost",
+				RequestedLevel: 3,
+			},
+			Resolved: true,
+			SkillID:  skillIDOne,
+		},
+		{
+			Requested: requestedSkill{
+				OriginalText:   "Unknown Skill Lv1",
+				BaseName:       "Unknown Skill",
+				RequestedLevel: 1,
+			},
+			Resolved: false,
+			SkillID:  skillIDTwo,
+		},
+	}
+	translated := []TranslatedSkill{
+		{OriginalText: "Attack Boost Lv3", Name: "Boost d'Attaque"},
+		{OriginalText: "Unknown Skill Lv1", Name: "Unknown Skill Lv1"},
+	}
+
+	decorationRows := []decorationTranslationRow{
+		{
+			SkillID:               skillIDOne,
+			DecorationExternalKey: "attack-jewel-1",
+			SlotSize:              1,
+			Rarity:                5,
+			SkillLevel:            1,
+			LanguageCode:          "en",
+			Name:                  "Attack Jewel [1]",
+		},
+		{
+			SkillID:               skillIDOne,
+			DecorationExternalKey: "attack-jewel-1",
+			SlotSize:              1,
+			Rarity:                5,
+			SkillLevel:            1,
+			LanguageCode:          "fr",
+			Name:                  "Joyau attaque [1]",
+		},
+		{
+			SkillID:               skillIDOne,
+			DecorationExternalKey: "critical-jewel-2",
+			SlotSize:              2,
+			Rarity:                7,
+			SkillLevel:            1,
+			LanguageCode:          "en",
+			Name:                  "Critical Jewel [2]",
+		},
+	}
+
+	enriched := attachAssociatedJewels(resolved, translated, decorationRows, "fr")
+	if len(enriched) != 2 {
+		t.Fatalf("expected 2 translated rows, got %d", len(enriched))
+	}
+
+	if len(enriched[0].AssociatedJewels) != 2 {
+		t.Fatalf("expected 2 associated jewels on first skill, got %d", len(enriched[0].AssociatedJewels))
+	}
+	first := enriched[0].AssociatedJewels[0]
+	second := enriched[0].AssociatedJewels[1]
+	if first.DecorationExternalKey != "attack-jewel-1" {
+		t.Fatalf("expected first jewel to be attack-jewel-1, got %q", first.DecorationExternalKey)
+	}
+	if first.Name != "Joyau attaque [1]" {
+		t.Fatalf("expected target-language jewel name, got %q", first.Name)
+	}
+	if second.DecorationExternalKey != "critical-jewel-2" {
+		t.Fatalf("expected second jewel to be critical-jewel-2, got %q", second.DecorationExternalKey)
+	}
+	if second.Name != "Critical Jewel [2]" {
+		t.Fatalf("expected english fallback jewel name, got %q", second.Name)
+	}
+
+	if len(enriched[1].AssociatedJewels) != 0 {
+		t.Fatalf("expected no associated jewel for unresolved skill, got %+v", enriched[1].AssociatedJewels)
+	}
+}
+
+func TestDeduplicateResolvedSkills_MergesAliasAndCanonicalEntries(t *testing.T) {
+	skillID := uuid.MustParse("00000000-0000-0000-0000-0000000000d3")
+	rows := []resolvedSkill{
+		{
+			Requested: requestedSkill{
+				OriginalText:   "Guts (Tenacity)",
+				BaseName:       "Guts (Tenacity)",
+				RequestedLevel: 1,
+			},
+			SkillID:     skillID,
+			ExternalKey: "lords-soul",
+			MaxLevel:    3,
+			IsSetBonus:  true,
+			TargetName:  "Âme du seigneur",
+			Resolved:    true,
+			Translated:  true,
+		},
+		{
+			Requested: requestedSkill{
+				OriginalText:   "Lord's Soul",
+				BaseName:       "Lord's Soul",
+				RequestedLevel: 3,
+			},
+			SkillID:     skillID,
+			ExternalKey: "lords-soul",
+			MaxLevel:    3,
+			IsSetBonus:  true,
+			TargetName:  "Âme du seigneur",
+			Resolved:    true,
+			Translated:  true,
+		},
+	}
+
+	out := deduplicateResolvedSkills(rows)
+	if len(out) != 1 {
+		t.Fatalf("expected 1 deduplicated row, got %d", len(out))
+	}
+	if out[0].ExternalKey != "lords-soul" {
+		t.Fatalf("expected external key lords-soul, got %q", out[0].ExternalKey)
+	}
+	if out[0].Requested.RequestedLevel != 3 {
+		t.Fatalf("expected highest requested level to be kept, got %d", out[0].Requested.RequestedLevel)
+	}
+	if out[0].Requested.OriginalText != "Guts (Tenacity)" {
+		t.Fatalf("expected first original text to be preserved, got %q", out[0].Requested.OriginalText)
+	}
+}

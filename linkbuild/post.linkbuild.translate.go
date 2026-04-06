@@ -27,11 +27,13 @@ func PostLinkbuildTranslate(ctx context.Context, req *linkbuildTranslateRequest)
 	}
 
 	return &linkbuildTranslateResponse{
-		SourceLangDetected: out.SourceLangDetected,
-		TargetLang:         out.TargetLang,
-		TranslationMode:    out.TranslationMode,
-		SkillsOriginal:     out.SkillsOriginal,
-		SkillsTranslated:   out.SkillsTranslated,
-		UnmatchedElements:  out.UnmatchedElements,
+		SourceLangDetected:         out.SourceLangDetected,
+		TargetLang:                 out.TargetLang,
+		TranslationMode:            out.TranslationMode,
+		SkillsOriginal:             out.SkillsOriginal,
+		SkillsTranslated:           out.SkillsTranslated,
+		SetSkillsTranslated:        out.SetSkillsTranslated,
+		ArmorJewelSkillsTranslated: out.ArmorJewelSkillsTranslated,
+		UnmatchedElements:          out.UnmatchedElements,
 	}, nil
 }

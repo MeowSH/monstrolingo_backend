@@ -8,12 +8,14 @@ type linkbuildTranslateRequest struct {
 }
 
 type linkbuildTranslateResponse struct {
-	SourceLangDetected string                          `json:"source_lang_detected"`
-	TargetLang         string                          `json:"target_lang"`
-	TranslationMode    string                          `json:"translation_mode"`
-	SkillsOriginal     []simbuildcore.OriginalSkill    `json:"skills_original"`
-	SkillsTranslated   []simbuildcore.TranslatedSkill  `json:"skills_translated"`
-	UnmatchedElements  []simbuildcore.UnmatchedElement `json:"unmatched_elements"`
+	SourceLangDetected         string                          `json:"source_lang_detected"`
+	TargetLang                 string                          `json:"target_lang"`
+	TranslationMode            string                          `json:"translation_mode"`
+	SkillsOriginal             []simbuildcore.OriginalSkill    `json:"skills_original"`
+	SkillsTranslated           []simbuildcore.TranslatedSkill  `json:"skills_translated"`
+	SetSkillsTranslated        []simbuildcore.TranslatedSkill  `json:"set_skills_translated"`
+	ArmorJewelSkillsTranslated []simbuildcore.TranslatedSkill  `json:"armor_jewel_skills_translated"`
+	UnmatchedElements          []simbuildcore.UnmatchedElement `json:"unmatched_elements"`
 }
 
 func getLinkbuildService() (*simbuildcore.Service, error) {
