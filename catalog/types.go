@@ -83,10 +83,20 @@ type SkillLinkDetail struct {
 	Name             string `json:"name"`
 	Description      string `json:"description"`
 	EffectSummary    string `json:"effect_summary,omitempty"`
+	SkillKind        string `json:"skill_kind,omitempty"`
+	IsSetBonusSkill  bool   `json:"is_set_bonus_skill"`
 	Level            int16  `json:"level"`
 	SortOrder        int16  `json:"sort_order"`
 	SourceType       string `json:"source_type,omitempty"`
 	RankRequired     int16  `json:"rank_required,omitempty"`
+}
+
+type AssociatedJewelDetail struct {
+	DecorationExternalKey string `json:"decoration_external_key"`
+	Name                  string `json:"name"`
+	SlotSize              int16  `json:"slot_size"`
+	Rarity                int16  `json:"rarity"`
+	SkillLevel            int16  `json:"skill_level"`
 }
 
 type SkillLevelDetail struct {
@@ -148,6 +158,8 @@ type WeaponDetailResponse struct {
 	SortOrder       int32             `json:"sort_order"`
 	Translation     DetailTranslation `json:"translation"`
 	Skills          []SkillLinkDetail `json:"skills"`
+	SetSkills       []SkillLinkDetail `json:"set_skills,omitempty"`
+	RegularSkills   []SkillLinkDetail `json:"regular_skills,omitempty"`
 }
 
 type ArmorDetailResponse struct {
@@ -175,18 +187,21 @@ type ArmorDetailResponse struct {
 	SortOrder           int32             `json:"sort_order"`
 	Translation         DetailTranslation `json:"translation"`
 	Skills              []SkillLinkDetail `json:"skills"`
+	SetSkills           []SkillLinkDetail `json:"set_skills,omitempty"`
+	RegularSkills       []SkillLinkDetail `json:"regular_skills,omitempty"`
 }
 
 type SkillDetailResponse struct {
-	ExternalKey     string             `json:"external_key"`
-	SyncedAt        time.Time          `json:"synced_at"`
-	SkillKind       string             `json:"skill_kind"`
-	MaxLevel        int16              `json:"max_level"`
-	IsBinary        bool               `json:"is_binary"`
-	IsSetBonusSkill bool               `json:"is_set_bonus_skill"`
-	SortOrder       int32              `json:"sort_order"`
-	Translation     DetailTranslation  `json:"translation"`
-	Levels          []SkillLevelDetail `json:"levels"`
+	ExternalKey      string                  `json:"external_key"`
+	SyncedAt         time.Time               `json:"synced_at"`
+	SkillKind        string                  `json:"skill_kind"`
+	MaxLevel         int16                   `json:"max_level"`
+	IsBinary         bool                    `json:"is_binary"`
+	IsSetBonusSkill  bool                    `json:"is_set_bonus_skill"`
+	SortOrder        int32                   `json:"sort_order"`
+	Translation      DetailTranslation       `json:"translation"`
+	Levels           []SkillLevelDetail      `json:"levels"`
+	AssociatedJewels []AssociatedJewelDetail `json:"associated_jewels,omitempty"`
 }
 
 type DecorationDetailResponse struct {

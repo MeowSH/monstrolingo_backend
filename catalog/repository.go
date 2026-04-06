@@ -35,6 +35,14 @@ type translationRecord struct {
 	LanguageCode  string
 }
 
+type associatedJewelRow struct {
+	DecorationExternalKey string
+	Name                  string
+	SlotSize              int16
+	Rarity                int16
+	SkillLevel            int16
+}
+
 func NewRepository(db *gorm.DB) *Repository {
 	return &Repository{db: db}
 }
@@ -191,6 +199,7 @@ func (r *Repository) GetWeaponDetail(ctx context.Context, externalKey string, ta
 		skill.SourceType = rel.SourceType
 		skills = append(skills, skill)
 	}
+	setSkills, regularSkills := splitSkillsBySetType(skills)
 
 	return &WeaponDetailResponse{
 		ExternalKey:     row.ExternalKey,
@@ -221,6 +230,8 @@ func (r *Repository) GetWeaponDetail(ctx context.Context, externalKey string, ta
 		SortOrder:       row.SortOrder,
 		Translation:     translation,
 		Skills:          skills,
+		SetSkills:       setSkills,
+		RegularSkills:   regularSkills,
 	}, nil
 }
 
@@ -250,6 +261,7 @@ func (r *Repository) GetArmorDetail(ctx context.Context, externalKey string, tar
 		skill.SortOrder = rel.SortOrder
 		skills = append(skills, skill)
 	}
+	setSkills, regularSkills := splitSkillsBySetType(skills)
 
 	return &ArmorDetailResponse{
 		ExternalKey:         row.ExternalKey,
@@ -276,6 +288,8 @@ func (r *Repository) GetArmorDetail(ctx context.Context, externalKey string, tar
 		SortOrder:           row.SortOrder,
 		Translation:         translation,
 		Skills:              skills,
+		SetSkills:           setSkills,
+		RegularSkills:       regularSkills,
 	}, nil
 }
 
@@ -303,18 +317,67 @@ func (r *Repository) GetSkillDetail(ctx context.Context, externalKey string, tar
 			Description:     lvl.Description,
 		})
 	}
+	associatedJewels, err := r.loadAssociatedJewelsForSkill(ctx, row.ID, targetLang)
+	if err != nil {
+		return nil, err
+	}
 
 	return &SkillDetailResponse{
-		ExternalKey:     row.ExternalKey,
-		SyncedAt:        row.SyncedAt,
-		SkillKind:       row.SkillKind,
-		MaxLevel:        row.MaxLevel,
-		IsBinary:        row.IsBinary,
-		IsSetBonusSkill: row.IsSetBonusSkill,
-		SortOrder:       row.SortOrder,
-		Translation:     translation,
-		Levels:          levels,
+		ExternalKey:      row.ExternalKey,
+		SyncedAt:         row.SyncedAt,
+		SkillKind:        row.SkillKind,
+		MaxLevel:         row.MaxLevel,
+		IsBinary:         row.IsBinary,
+		IsSetBonusSkill:  row.IsSetBonusSkill,
+		SortOrder:        row.SortOrder,
+		Translation:      translation,
+		Levels:           levels,
+		AssociatedJewels: associatedJewels,
 	}, nil
+}
+
+func (r *Repository) loadAssociatedJewelsForSkill(
+	ctx context.Context,
+	skillID uuid.UUID,
+	targetLang string,
+) ([]AssociatedJewelDetail, error) {
+	rows := make([]associatedJewelRow, 0, 16)
+	selectSQL := strings.Join([]string{
+		"d.external_key AS decoration_external_key",
+		"d.slot_size AS slot_size",
+		"d.rarity AS rarity",
+		"ds.level AS skill_level",
+		"COALESCE(NULLIF(TRIM(tgt.name), ''), NULLIF(TRIM(en.name), ''), d.external_key) AS name",
+	}, ", ")
+	if err := r.db.WithContext(ctx).
+		Table("decoration_skills AS ds").
+		Select(selectSQL).
+		Joins("JOIN decorations AS d ON d.id = ds.decoration_id").
+		Joins("LEFT JOIN languages AS lt ON lt.code = ? AND lt.is_active = TRUE", targetLang).
+		Joins("LEFT JOIN decorations_translations AS tgt ON tgt.decoration_id = d.id AND tgt.language_id = lt.id").
+		Joins("LEFT JOIN languages AS le ON le.code = ? AND le.is_active = TRUE", "en").
+		Joins("LEFT JOIN decorations_translations AS en ON en.decoration_id = d.id AND en.language_id = le.id").
+		Where("ds.skill_id = ?", skillID).
+		Where("d.deleted_at IS NULL").
+		Order("d.slot_size ASC").
+		Order("ds.level DESC").
+		Order("COALESCE(NULLIF(TRIM(tgt.name), ''), NULLIF(TRIM(en.name), ''), d.external_key) ASC").
+		Order("d.external_key ASC").
+		Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+
+	out := make([]AssociatedJewelDetail, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, AssociatedJewelDetail{
+			DecorationExternalKey: row.DecorationExternalKey,
+			Name:                  strings.TrimSpace(row.Name),
+			SlotSize:              row.SlotSize,
+			Rarity:                row.Rarity,
+			SkillLevel:            row.SkillLevel,
+		})
+	}
+	return out, nil
 }
 
 func (r *Repository) GetDecorationDetail(ctx context.Context, externalKey string, targetLang string) (*DecorationDetailResponse, error) {
@@ -489,7 +552,25 @@ func (r *Repository) loadSkillLinkBase(ctx context.Context, skillID uuid.UUID, t
 		Name:             tr.Name,
 		Description:      tr.Description,
 		EffectSummary:    tr.EffectSummary,
+		SkillKind:        row.SkillKind,
+		IsSetBonusSkill:  row.IsSetBonusSkill,
 	}, nil
+}
+
+func splitSkillsBySetType(skills []SkillLinkDetail) ([]SkillLinkDetail, []SkillLinkDetail) {
+	if len(skills) == 0 {
+		return nil, nil
+	}
+	setSkills := make([]SkillLinkDetail, 0, len(skills))
+	regularSkills := make([]SkillLinkDetail, 0, len(skills))
+	for _, skill := range skills {
+		if skill.IsSetBonusSkill {
+			setSkills = append(setSkills, skill)
+			continue
+		}
+		regularSkills = append(regularSkills, skill)
+	}
+	return setSkills, regularSkills
 }
 
 func (r *Repository) loadDetailTranslation(ctx context.Context, spec categorySpec, entityID uuid.UUID, targetLang string) (DetailTranslation, error) {
