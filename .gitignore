@@ -48,3 +48,7 @@ encore.gen.cue
 # Private ingestion cache (non-public, local only)
 /internal/*/cache/**
 !/internal/*/cache/.keep
+
+# Private local integration layer (non-public)
+/internal/simbuildcore/localbridge/**
+!/internal/simbuildcore/localbridge/data/.keep
