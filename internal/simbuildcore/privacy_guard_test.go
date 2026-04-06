@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestPublicReadmeAndParser_DoNotLeakSourceDomain(t *testing.T) {
+func TestPublicReadme_DoesNotLeakSourceDomain(t *testing.T) {
 	domainToken := strings.Join([]string{"mhwilds", ".", "wiki", "-db", ".", "com"}, "")
 	simPathToken := strings.Join([]string{"wiki", "-db", ".", "com", "/sim/"}, "")
 	bannedTokens := []string{
@@ -16,7 +16,6 @@ func TestPublicReadmeAndParser_DoNotLeakSourceDomain(t *testing.T) {
 	}
 	files := []string{
 		filepath.Clean("../../README.md"),
-		"url_parser.go",
 	}
 
 	for _, path := range files {

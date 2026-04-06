@@ -1,15 +1,13 @@
 package simbuildcore
 
 import (
-	"net"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 )
 
 const (
-	simURLHostsEnv = "SIMBUILD_ALLOWED_SIM_HOSTS"
+	canonicalSimHost = "mhwilds.wiki-db.com"
 )
 
 func parseAndValidateSimURL(raw string) (parsedSimURL, error) {
@@ -23,7 +21,7 @@ func parseAndValidateSimURL(raw string) (parsedSimURL, error) {
 		return parsedSimURL{}, invalidArgument("url is invalid")
 	}
 	if !isSupportedSimURL(parsed) {
-		return parsedSimURL{}, invalidArgument("url must target a supported simulator host and /sim/ path")
+		return parsedSimURL{}, invalidArgument("url must target https://mhwilds.wiki-db.com/sim/")
 	}
 	if strings.TrimSpace(parsed.Fragment) == "" {
 		return parsedSimURL{}, invalidArgument("url fragment is required")
@@ -103,15 +101,7 @@ func isSupportedSimURL(parsed *url.URL) bool {
 		return false
 	}
 	host := strings.ToLower(strings.TrimSpace(parsed.Hostname()))
-	if host == "" {
-		return false
-	}
-
-	allowedHosts, configured := configuredSimulatorHosts()
-	if !configured {
-		return false
-	}
-	if _, ok := allowedHosts[host]; !ok {
+	if host == "" || host != canonicalSimHost {
 		return false
 	}
 
@@ -141,45 +131,6 @@ func looksLikeHostPath(raw string) bool {
 		return false
 	}
 	return strings.Contains(host, ".")
-}
-
-func configuredSimulatorHosts() (map[string]struct{}, bool) {
-	raw := strings.TrimSpace(os.Getenv(simURLHostsEnv))
-	if raw == "" {
-		return nil, false
-	}
-	out := make(map[string]struct{}, 4)
-	for _, part := range strings.Split(raw, ",") {
-		host := normalizeConfiguredHost(part)
-		if host == "" {
-			continue
-		}
-		out[host] = struct{}{}
-	}
-	if len(out) == 0 {
-		return nil, false
-	}
-	return out, true
-}
-
-func normalizeConfiguredHost(raw string) string {
-	value := strings.TrimSpace(strings.ToLower(raw))
-	if value == "" {
-		return ""
-	}
-	value = strings.TrimPrefix(value, "https://")
-	value = strings.TrimPrefix(value, "http://")
-	if idx := strings.IndexAny(value, "/?#"); idx >= 0 {
-		value = value[:idx]
-	}
-
-	if strings.Contains(value, ":") {
-		if host, _, err := net.SplitHostPort(value); err == nil {
-			value = host
-		}
-	}
-	value = strings.Trim(value, "[]")
-	return strings.TrimSpace(value)
 }
 
 func splitSkillTokens(raw string) []string {
